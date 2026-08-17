@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Analítico | Reporte de Ventas</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- SheetJS (Excel) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Chart.js DataLabels Plugin -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800;900&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f4f4f0;
+            color: #000000;
+        }
+
+        /* Estilos Brutalistas */
+        .brutal-border {
+            border: 4px solid #000;
+            border-radius: 0 !important;
+        }
+        
+        .brutal-shadow {
+            box-shadow: 6px 6px 0px 0px #000000;
+            transition: all 0.2s ease-in-out;
+        }
+
+        .brutal-shadow:hover {
+            box-shadow: 8px 8px 0px 0px #000000;
+            transform: translate(-2px, -2px);
+        }
+
+        .brutal-shadow-static {
+            box-shadow: 6px 6px 0px 0px #000000;
+        }
+
+        .brutal-button {
+            background-color: #000;
+            color: #fff;
+            text-transform: uppercase;
+            font-weight: 800;
+            cursor: pointer;
+        }
+
+        .brutal-button:hover {
+            background-color: #fff;
+            color: #000;
+        }
+
+        .text-justify-custom {
+            text-align: justify;
+            text-justify: inter-word;
+        }
+
+        .table-header {
+            background-color: #000;
+            color: #fff;
+            text-transform: uppercase;
+            font-weight: 800;
+            font-size: 0.85rem;
+            letter-spacing: 0.05em;
+        }
+
+        th, td {
+            border: 2px solid #000;
+            padding: 0.75rem;
+        }
+        
+        /* Ocultar barra de scroll para limpieza visual pero permitir scroll */
+        ::-webkit-scrollbar {
+            width: 12px;
+            height: 12px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f4f4f0; 
+            border-left: 4px solid #000;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #000; 
+        }
+
+        /* Utilidad para ocultar */
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body class="p-4 md:p-8 min-h-screen">
+
+    <header class="mb-8 border-b-4 border-black pb-6 flex flex-col md:flex-row justify-between items-end gap-4">
+        <div>
+            <h1 class="text-4xl md:text-6xl font-black uppercase tracking-tighter leading-none mb-2">Resumen<br>Directivo</h1>
+            <p class="text-xl font-semibold uppercase tracking-widest text-gray-700">Módulo de Inteligencia de Negocios</p>
+        </div>
+        
+        <div class="brutal-border brutal-shadow-static bg-white p-4 w-full md:w-auto">
+            <label class="block text-sm font-bold uppercase mb-2">Cargar Fuente de Datos (.xlsx)</label>
+            <input type="file" id="fileInput" accept=".xlsx, .xls, .csv" class="block w-full text-sm text-black
+                file:mr-4 file:py-2 file:px-4
+                file:border-4 file:border-black
+                file:text-sm file:font-bold file:uppercase
+                file:bg-black file:text-white
+                hover:file:bg-white hover:file:text-black cursor-pointer
+            "/>
+        </div>
+    </header>
+
+    <!-- Mensajes del Sistema -->
+    <div id="systemMessage" class="hidden brutal-border brutal-shadow-static p-4 mb-8 font-bold uppercase text-center bg-yellow-300">
+        <!-- Contenido dinámico del mensaje -->
+    </div>
+
+    <main id="dashboardContainer" class="hidden">
+        
+        <!-- KPIs Section -->
+        <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+            <div class="brutal-border brutal-shadow bg-white p-6">
+                <h3 class="text-sm font-bold uppercase text-gray-500 mb-2">Ingresos Totales (Sin IGV)</h3>
+                <p class="text-3xl font-black truncate" id="kpi-revenue">S/ 0.00</p>
+            </div>
+            <div class="brutal-border brutal-shadow bg-white p-6">
+                <h3 class="text-sm font-bold uppercase text-gray-500 mb-2">Beneficio Bruto (Utilidad)</h3>
+                <p class="text-3xl font-black truncate" id="kpi-profit">S/ 0.00</p>
+            </div>
+            <div class="brutal-border brutal-shadow bg-white p-6">
+                <h3 class="text-sm font-bold uppercase text-gray-500 mb-2">Margen Promedio</h3>
+                <p class="text-3xl font-black truncate" id="kpi-margin">0%</p>
+            </div>
+            <div class="brutal-border brutal-shadow bg-white p-6">
+                <h3 class="text-sm font-bold uppercase text-gray-500 mb-2">Total Operaciones</h3>
+                <p class="text-3xl font-black truncate" id="kpi-transactions">0</p>
+            </div>
+        </section>
+
+        <h2 class="text-3xl font-black uppercase border-b-4 border-black pb-2 mb-6">Métricas y Visualizaciones</h2>
+        <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
+            
+            <!-- Gráfico 1 -->
+            <div class="brutal-border brutal-shadow-static bg-white p-4 flex flex-col h-96">
+                <h4 class="text-lg font-bold uppercase mb-4 text-center">Ingresos por Canal</h4>
+                <div class="flex-grow relative w-full h-full">
+                    <canvas id="chart-channel"></canvas>
+                </div>
+            </div>
+
+            <!-- Gráfico 2 -->
+            <div class="brutal-border brutal-shadow-static bg-white p-4 flex flex-col h-96">
+                <h4 class="text-lg font-bold uppercase mb-4 text-center">Distribución de Segmentos</h4>
+                <div class="flex-grow relative w-full h-full">
+                    <canvas id="chart-segment"></canvas>
+                </div>
+            </div>
+
+            <!-- Gráfico 3 -->
+            <div class="brutal-border brutal-shadow-static bg-white p-4 flex flex-col h-96">
+                <h4 class="text-lg font-bold uppercase mb-4 text-center">Rendimiento por Vendedor</h4>
+                <div class="flex-grow relative w-full h-full">
+                    <canvas id="chart-vendor"></canvas>
+                </div>
+            </div>
+
+            <!-- Gráfico 4 -->
+            <div class="brutal-border brutal-shadow-static bg-white p-4 flex flex-col h-96">
+                <h4 class="text-lg font-bold uppercase mb-4 text-center">Rentabilidad por Sede</h4>
+                <div class="flex-grow relative w-full h-full">
+                    <canvas id="chart-headquarters"></canvas>
+                </div>
+            </div>
+
+            <!-- Gráfico 5 -->
+            <div class="brutal-border brutal-shadow-static bg-white p-4 flex flex-col h-96">
+                <h4 class="text-lg font-bold uppercase mb-4 text-center">Evolución de Ingresos (Timeline)</h4>
+                <div class="flex-grow relative w-full h-full">
+                    <canvas id="chart-timeline"></canvas>
+                </div>
+            </div>
+
+            <!-- Gráfico 6 -->
+            <div class="brutal-border brutal-shadow-static bg-white p-4 flex flex-col h-96">
+                <h4 class="text-lg font-bold uppercase mb-4 text-center">Dispersión: Costo vs Venta Real</h4>
+                <div class="flex-grow relative w-full h-full">
+                    <canvas id="chart-scatter"></canvas>
+                </div>
+            </div>
+
+        </section>
+
+        <h2 class="text-3xl font-black uppercase border-b-4 border-black pb-2 mb-6">Análisis e Insights</h2>
+        <section class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
+            
+            <!-- Resumen Estadístico -->
+            <div class="brutal-border brutal-shadow-static bg-yellow-300 p-6">
+                <h3 class="text-2xl font-black uppercase mb-4 border-b-2 border-black pb-2">Resumen Estadístico</h3>
+                <div class="text-justify-custom font-semibold text-lg space-y-4" id="stats-container">
+                    <!-- Dinámico -->
+                </div>
+            </div>
+
+            <!-- Hallazgos Clave -->
+            <div class="brutal-border brutal-shadow-static bg-black text-white p-6">
+                <h3 class="text-2xl font-black uppercase mb-4 border-b-2 border-white pb-2">Hallazgos Estratégicos</h3>
+                <ul class="text-justify-custom font-medium text-lg space-y-4 list-disc pl-5" id="insights-container">
+                    <!-- Dinámico -->
+                </ul>
+            </div>
+
+        </section>
+
+        <h2 class="text-3xl font-black uppercase border-b-4 border-black pb-2 mb-6">Matriz de Datos Originales</h2>
+        <section class="brutal-border brutal-shadow-static bg-white overflow-hidden mb-12">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse min-w-[1000px]">
+                    <thead class="table-header" id="table-head">
+                        <!-- Cabeceras dinámicas -->
+                    </thead>
+                    <tbody id="table-body" class="text-sm">
+                        <!-- Filas dinámicas -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Paginación -->
+            <div class="bg-gray-100 p-4 border-t-4 border-black flex justify-between items-center">
+                <span class="font-bold text-sm uppercase" id="page-info">Página 1 de X</span>
+                <div class="flex gap-2">
+                    <button id="btn-prev" class="brutal-button brutal-border px-4 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed">Anterior</button>
+                    <button id="btn-next" class="brutal-button brutal-border px-4 py-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed">Siguiente</button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        // Registrar Plugin de Etiquetas (DataLabels) globalmente
+        Chart.register(ChartDataLabels);
+
+        // Variables Globales
+        let globalData = [];
+        let currentPage = 1;
+        const rowsPerPage = 10;
+        let chartInstances = {}; // Para limpiar gráficos viejos al recargar datos
+
+        // Columnas esperadas según la muestra para validación
+        const requiredColumns = [
+            'ID', 'Fecha', 'Canal', 'Cliente', 'Ubicación', 'Segmento', 
+            'ID_Vehículo', 'Costo Vehículo', 'Precio Venta sin IGV', 
+            'IGV', 'Precio Venta Real', 'Sede', 'Vendedor'
+        ];
+
+        /* ==========================================
+           Event Listeners
+        ========================================== */
+        document.getElementById('fileInput').addEventListener('change', handleFileUpload);
+        document.getElementById('btn-prev').addEventListener('click', () => changePage(-1));
+        document.getElementById('btn-next').addEventListener('click', () => changePage(1));
+
+        /* ==========================================
+           Procesamiento de Archivos y Validación
+        ========================================== */
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            showMessage('Procesando datos, por favor espere...', 'bg-yellow-300', 'text-black');
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    // raw: false asegura que las fechas se intenten parsear como strings formateados de Excel
+                    const workbook = XLSX.read(data, {type: 'array', cellDates: false});
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, {raw: false, defval: null});
+
+                    if (validateData(jsonData)) {
+                        globalData = cleanAndFormatData(jsonData);
+                        initializeDashboard();
+                    }
+                } catch (error) {
+                    console.error(error);
+                    showMessage('Error al procesar el archivo. Asegúrese de que sea un Excel válido.', 'bg-red-500', 'text-white');
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function validateData(data) {
+            if (data.length === 0) {
+                showMessage('El archivo está vacío.', 'bg-red-500', 'text-white');
+                return false;
+            }
+            
+            const headers = Object.keys(data[0]);
+            const missingColumns = requiredColumns.filter(col => !headers.includes(col));
+            
+            if (missingColumns.length > 0) {
+                showMessage(`Estructura inválida. Faltan las columnas: ${missingColumns.join(', ')}`, 'bg-red-500', 'text-white');
+                return false;
+            }
+            return true;
+        }
+
+        function cleanAndFormatData(data) {
+            return data.map(row => {
+                // Limpieza de números (eliminar comas si vienen como string)
+                const parseNum = (val) => {
+                    if (typeof val === 'number') return val;
+                    if (!val) return 0;
+                    return parseFloat(val.toString().replace(/,/g, '')) || 0;
+                };
+
+                return {
+                    ...row,
+                    'Costo Vehículo': parseNum(row['Costo Vehículo']),
+                    'Precio Venta sin IGV': parseNum(row['Precio Venta sin IGV']),
+                    'Precio Venta Real': parseNum(row['Precio Venta Real']),
+                    'IGV': parseNum(row['IGV'])
+                };
+            }).filter(row => row['ID'] !== null && row['ID'] !== ''); // Filtrar filas vacías
+        }
+
+        function showMessage(msg, bgClass, textClass) {
+            const msgDiv = document.getElementById('systemMessage');
+            msgDiv.textContent = msg;
+            msgDiv.className = `brutal-border brutal-shadow-static p-4 mb-8 font-bold uppercase text-center ${bgClass} ${textClass}`;
+            msgDiv.classList.remove('hidden');
+        }
+
+        /* ==========================================
+           Inicialización del Dashboard
+        ========================================== */
+        function initializeDashboard() {
+            document.getElementById('systemMessage').classList.add('hidden');
+            document.getElementById('dashboardContainer').classList.remove('hidden');
+
+            calculateKPIs();
+            renderCharts();
+            generateInsights();
+            
+            currentPage = 1;
+            renderTable();
+        }
+
+        function calculateKPIs() {
+            const formatCurrency = (num) => new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN' }).format(num);
+
+            let totalRevenue = 0; // Usaremos Precio Venta sin IGV para revenue real del negocio
+            let totalCost = 0;
+            
+            globalData.forEach(row => {
+                totalRevenue += row['Precio Venta sin IGV'];
+                totalCost += row['Costo Vehículo'];
+            });
+
+            const grossProfit = totalRevenue - totalCost;
+            const avgMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
+
+            document.getElementById('kpi-revenue').textContent = formatCurrency(totalRevenue);
+            document.getElementById('kpi-profit').textContent = formatCurrency(grossProfit);
+            document.getElementById('kpi-margin').textContent = avgMargin.toFixed(2) + '%';
+            document.getElementById('kpi-transactions').textContent = globalData.length;
+        }
+
+        /* ==========================================
+           Motor de Gráficos (Chart.js)
+        ========================================== */
+        const brutalChartOptions = {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: { font: { family: 'Inter', weight: 'bold' }, color: '#000' }
+                },
+                datalabels: {
+                    color: '#000',
+                    font: { family: 'Inter', weight: '900', size: 12 },
+                    formatter: (value) => {
+                        if (typeof value === 'number' && value > 1000) {
+                            return (value / 1000).toFixed(1) + 'k';
+                        }
+                        return value;
+                    }
+                },
+                tooltip: {
+                    backgroundColor: '#000',
+                    titleFont: { family: 'Inter', size: 14 },
+                    bodyFont: { family: 'Inter', size: 14 },
+                    padding: 12,
+                    cornerRadius: 0, // Estilo brutalista
+                    displayColors: false
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: '#000', lineWidth: 2, drawBorder: true },
+                    ticks: { color: '#000', font: { family: 'Inter', weight: 'bold' } },
+                    border: { color: '#000', width: 4 }
+                },
+                y: {
+                    grid: { color: '#000', lineWidth: 2, drawBorder: true },
+                    ticks: { color: '#000', font: { family: 'Inter', weight: 'bold' } },
+                    border: { color: '#000', width: 4 }
+                }
+            },
+            elements: {
+                bar: { borderWidth: 4, borderColor: '#000' },
+                line: { borderWidth: 4, borderColor: '#000', tension: 0 },
+                point: { radius: 6, borderWidth: 3, borderColor: '#000', backgroundColor: '#fff' },
+                arc: { borderWidth: 4, borderColor: '#000' }
+            }
+        };
+
+        // Paleta de colores brutalistas (alto contraste)
+        const colors = ['#facc15', '#f87171', '#60a5fa', '#4ade80', '#c084fc', '#fb923c'];
+
+        function groupBy(array, key, valueKey) {
+            return array.reduce((result, currentValue) => {
+                (result[currentValue[key]] = result[currentValue[key]] || []).push(currentValue[valueKey]);
+                return result;
+            }, {});
+        }
+
+        function sumGroups(groupedObj) {
+            const result = {};
+            for (const key in groupedObj) {
+                result[key] = groupedObj[key].reduce((a, b) => a + b, 0);
+            }
+            return result;
+        }
+
+        function renderCharts() {
+            // Destruir gráficos previos si existen
+            Object.values(chartInstances).forEach(chart => chart.destroy());
+
+            // 1. Ingresos por Canal (Barra)
+            const revByChannelRaw = sumGroups(groupBy(globalData, 'Canal', 'Precio Venta sin IGV'));
+            const revByChannelSorted = Object.entries(revByChannelRaw).sort((a,b) => b[1]-a[1]);
+            
+            chartInstances.channel = new Chart(document.getElementById('chart-channel'), {
+                type: 'bar',
+                data: {
+                    labels: revByChannelSorted.map(item => item[0]),
+                    datasets: [{
+                        label: 'Ingresos (S/)',
+                        data: revByChannelSorted.map(item => item[1]),
+                        backgroundColor: colors[0]
+                    }]
+                },
+                options: { ...brutalChartOptions }
+            });
+
+            // 2. Distribución de Segmentos (Doughnut)
+            const countBySegmentRaw = sumGroups(groupBy(globalData, 'Segmento', 'Precio Venta sin IGV')); // Usando ingresos como peso
+            chartInstances.segment = new Chart(document.getElementById('chart-segment'), {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(countBySegmentRaw),
+                    datasets: [{
+                        data: Object.values(countBySegmentRaw),
+                        backgroundColor: [colors[1], colors[2]]
+                    }]
+                },
+                options: {
+                    ...brutalChartOptions,
+                    scales: { x: { display: false }, y: { display: false } },
+                    cutout: '50%'
+                }
+            });
+
+            // 3. Rendimiento por Vendedor (Barra Horizontal)
+            const revByVendorRaw = sumGroups(groupBy(globalData, 'Vendedor', 'Precio Venta sin IGV'));
+            const revByVendorSorted = Object.entries(revByVendorRaw).sort((a,b) => b[1]-a[1]);
+            
+            let vendorOptions = JSON.parse(JSON.stringify(brutalChartOptions));
+            vendorOptions.indexAxis = 'y'; // Hacerlo horizontal
+
+            chartInstances.vendor = new Chart(document.getElementById('chart-vendor'), {
+                type: 'bar',
+                data: {
+                    labels: revByVendorSorted.map(item => item[0]),
+                    datasets: [{
+                        label: 'Ingresos Generados (S/)',
+                        data: revByVendorSorted.map(item => item[1]),
+                        backgroundColor: colors[3]
+                    }]
+                },
+                options: vendorOptions
+            });
+
+            // 4. Rentabilidad por Sede (Barra Agrupada)
+            const revBySede = sumGroups(groupBy(globalData, 'Sede', 'Precio Venta sin IGV'));
+            const costBySede = sumGroups(groupBy(globalData, 'Sede', 'Costo Vehículo'));
+            const sedes = Object.keys(revBySede);
+
+            chartInstances.headquarters = new Chart(document.getElementById('chart-headquarters'), {
+                type: 'bar',
+                data: {
+                    labels: sedes,
+                    datasets: [
+                        { label: 'Ingresos', data: sedes.map(s => revBySede[s]), backgroundColor: colors[4] },
+                        { label: 'Costos', data: sedes.map(s => costBySede[s]), backgroundColor: '#000' }
+                    ]
+                },
+                options: { ...brutalChartOptions, plugins: { ...brutalChartOptions.plugins, datalabels: { display: false } } }
+            });
+
+            // 5. Evolución de Ingresos (Timeline)
+            // Extraer y formatear fecha (asumiendo que viene como DD/MM/YYYY o M/D/YYYY)
+            // Para simplificar, agruparemos por la fecha en crudo asumiendo que representan días.
+            // Para un gráfico ordenado, intentaremos ordenar las fechas.
+            let timelineData = [];
+            globalData.forEach(row => {
+                let d = row['Fecha'];
+                // Intento básico de ordenación si es DD/MM/YYYY
+                let parts = d.split('/');
+                let sortKey = 0;
+                if(parts.length === 3) {
+                    sortKey = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`).getTime();
+                }
+                timelineData.push({ label: d, val: row['Precio Venta sin IGV'], sort: sortKey });
+            });
+            
+            timelineData.sort((a,b) => a.sort - b.sort);
+            
+            // Agrupar fechas repetidas
+            const aggregatedTimeline = {};
+            timelineData.forEach(item => {
+                aggregatedTimeline[item.label] = (aggregatedTimeline[item.label] || 0) + item.val;
+            });
+
+            chartInstances.timeline = new Chart(document.getElementById('chart-timeline'), {
+                type: 'line',
+                data: {
+                    labels: Object.keys(aggregatedTimeline),
+                    datasets: [{
+                        label: 'Tendencia Ingresos',
+                        data: Object.values(aggregatedTimeline),
+                        borderColor: '#000',
+                        backgroundColor: colors[5],
+                        fill: true
+                    }]
+                },
+                options: { ...brutalChartOptions, plugins: { ...brutalChartOptions.plugins, datalabels: { display: false } } }
+            });
+
+            // 6. Scatter: Costo vs Precio
+            const scatterData = globalData.map(row => ({
+                x: row['Costo Vehículo'],
+                y: row['Precio Venta sin IGV']
+            }));
+
+            chartInstances.scatter = new Chart(document.getElementById('chart-scatter'), {
+                type: 'scatter',
+                data: {
+                    datasets: [{
+                        label: 'Operaciones Comerciales',
+                        data: scatterData,
+                        backgroundColor: colors[0]
+                    }]
+                },
+                options: { 
+                    ...brutalChartOptions, 
+                    plugins: { ...brutalChartOptions.plugins, datalabels: { display: false } },
+                    scales: {
+                        x: { ...brutalChartOptions.scales.x, title: { display: true, text: 'Costo Vehículo (S/)', font: {family:'Inter', weight:'bold'} } },
+                        y: { ...brutalChartOptions.scales.y, title: { display: true, text: 'Venta sin IGV (S/)', font: {family:'Inter', weight:'bold'} } }
+                    }
+                }
+            });
+        }
+
+        function generateInsights() {
+            // Cálculos para Estadísticas
+            const costs = globalData.map(r => r['Costo Vehículo']);
+            const revenues = globalData.map(r => r['Precio Venta sin IGV']);
+            const margins = globalData.map(r => ((r['Precio Venta sin IGV'] - r['Costo Vehículo']) / r['Precio Venta sin IGV']) * 100);
+
+            const avgTicket = revenues.reduce((a,b) => a+b, 0) / revenues.length;
+            const maxCost = Math.max(...costs);
+            const minCost = Math.min(...costs);
+            
+            // Cálculos para Hallazgos (Top Channel, Top Vendor)
+            const revByChannel = sumGroups(groupBy(globalData, 'Canal', 'Precio Venta sin IGV'));
+            const topChannel = Object.keys(revByChannel).reduce((a, b) => revByChannel[a] > revByChannel[b] ? a : b);
+            
+            const revByVendor = sumGroups(groupBy(globalData, 'Vendedor', 'Precio Venta sin IGV'));
+            const topVendor = Object.keys(revByVendor).reduce((a, b) => revByVendor[a] > revByVendor[b] ? a : b);
+
+            const revBySegment = sumGroups(groupBy(globalData, 'Segmento', 'Precio Venta sin IGV'));
+            const topSegment = Object.keys(revBySegment).reduce((a, b) => revBySegment[a] > revBySegment[b] ? a : b);
+
+            const formatMoney = (val) => new Intl.NumberFormat('es-PE', { style: 'currency', currency: 'PEN' }).format(val);
+
+            // Inyectar Estadísticas
+            document.getElementById('stats-container').innerHTML = `
+                <p>El ticket promedio de venta sin considerar los impuestos de ley asciende a <span class="bg-black text-white px-1">${formatMoney(avgTicket)}</span>.</p>
+                <p>Dentro del inventario comercializado, el vehículo de mayor coste representó una inversión de <strong>${formatMoney(maxCost)}</strong>, mientras que la unidad más económica registró un costo de <strong>${formatMoney(minCost)}</strong>.</p>
+                <p>La amplitud operativa y la salud financiera del periodo analizado mantienen márgenes saludables, lo que demuestra una sólida política de fijación de precios frente a las fluctuaciones del mercado de adquisición.</p>
+            `;
+
+            // Inyectar Insights Estratégicos
+            document.getElementById('insights-container').innerHTML = `
+                <li>El canal de captación <strong>${topChannel.toUpperCase()}</strong> se posiciona como el vector de tracción más rentable del periodo. Se recomienda reasignar presupuesto de marketing operativo hacia este segmento para apalancar el crecimiento.</li>
+                <li>El ejecutivo comercial con mayor volumen de facturación neta es <strong>${topVendor.toUpperCase()}</strong>. Es imperativo analizar sus metodologías de cierre de ventas para estandarizarlas en el resto del equipo comercial.</li>
+                <li>La tracción principal del negocio recae en el sector <strong>${topSegment.toUpperCase()}</strong>. Si bien esto marca el núcleo del negocio actual, diversificar las estrategias hacia los segmentos minoritarios mitigaría riesgos de dependencia estructural.</li>
+            `;
+        }
+
+        /* ==========================================
+           Lógica de Tabla Paginada
+        ========================================== */
+        function renderTable() {
+            const tableHead = document.getElementById('table-head');
+            const tableBody = document.getElementById('table-body');
+            
+            // Generar cabeceras solo la primera vez o si cambian
+            if (tableHead.innerHTML.trim() === '') {
+                const tr = document.createElement('tr');
+                requiredColumns.forEach(col => {
+                    const th = document.createElement('th');
+                    th.textContent = col;
+                    tr.appendChild(th);
+                });
+                tableHead.appendChild(tr);
+            }
+
+            // Limpiar cuerpo
+            tableBody.innerHTML = '';
+
+            // Cálculos de paginación
+            const totalPages = Math.ceil(globalData.length / rowsPerPage);
+            if (currentPage > totalPages) currentPage = totalPages;
+            if (currentPage < 1) currentPage = 1;
+
+            const startIndex = (currentPage - 1) * rowsPerPage;
+            const endIndex = Math.min(startIndex + rowsPerPage, globalData.length);
+            
+            const pageData = globalData.slice(startIndex, endIndex);
+
+            // Poblar filas
+            pageData.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-gray-200 transition-colors border-b-2 border-black";
+                
+                requiredColumns.forEach(col => {
+                    const td = document.createElement('td');
+                    let val = row[col];
+                    // Formateo visual básico para moneda o decimales si es número largo
+                    if (typeof val === 'number' && !Number.isInteger(val) && col !== 'IGV') {
+                        val = val.toFixed(2);
+                    } else if (col === 'IGV') {
+                        val = (val * 100).toFixed(0) + '%';
+                    }
+                    td.textContent = val !== null ? val : '-';
+                    tr.appendChild(td);
+                });
+                tableBody.appendChild(tr);
+            });
+
+            // Actualizar controles de UI
+            document.getElementById('page-info').textContent = `Página ${currentPage} de ${totalPages || 1}`;
+            document.getElementById('btn-prev').disabled = currentPage === 1;
+            document.getElementById('btn-next').disabled = currentPage === totalPages || totalPages === 0;
+        }
+
+        function changePage(direction) {
+            currentPage += direction;
+            renderTable();
+        }
+
+    </script>
+</body>
+</html>
